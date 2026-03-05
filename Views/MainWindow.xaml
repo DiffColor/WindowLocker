@@ -142,11 +142,11 @@
 				<StackPanel Margin="10">
 					<GroupBox Header="{DynamicResource SecuritySettings}" Margin="0,10,0,0">
 						<StackPanel>
-							<CheckBox Content="SmartScreen 사용 중지"
-                                      IsChecked="{Binding DisableSmartScreen}"
+							<CheckBox Content="{DynamicResource DisableSmartAppControl}"
+                                      IsChecked="{Binding DisableSmartAppControl}"
                                       Margin="0,5,0,0"/>
 
-							<CheckBox Content="사용자 계정 컨트롤(UAC) 사용 중지"
+							<CheckBox Content="{DynamicResource DisableUAC}"
                                       IsChecked="{Binding DisableUAC}"
                                       Margin="0,5,0,0"/>
 

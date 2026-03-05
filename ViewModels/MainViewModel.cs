@@ -263,18 +263,18 @@ namespace WindowLocker.ViewModels
             }
         }
 
-        private bool _disableSmartScreen;
-        public bool DisableSmartScreen
+        private bool _disableSmartAppControl;
+        public bool DisableSmartAppControl
         {
-            get => _disableSmartScreen;
+            get => _disableSmartAppControl;
             set
             {
-                if (_disableSmartScreen != value)
+                if (_disableSmartAppControl != value)
                 {
-                    _disableSmartScreen = value;
-                    Properties.Settings.Default.DisableSmartScreen = value;
+                    _disableSmartAppControl = value;
+                    Properties.Settings.Default.DisableSmartAppControl = value;
                     Properties.Settings.Default.Save();
-                    OnPropertyChanged(nameof(DisableSmartScreen));
+                    OnPropertyChanged(nameof(DisableSmartAppControl));
                 }
             }
         }
@@ -402,7 +402,14 @@ namespace WindowLocker.ViewModels
             _enableAutoLogin = Properties.Settings.Default.EnableAutoLogin;
             _autoLoginUsername = Properties.Settings.Default.AutoLoginUsername;
             _autoLoginPassword = Properties.Settings.Default.AutoLoginPassword;
-            _disableSmartScreen = Properties.Settings.Default.DisableSmartScreen;
+            _disableSmartAppControl = Properties.Settings.Default.DisableSmartAppControl;
+            if (!_disableSmartAppControl && Properties.Settings.Default.DisableSmartScreen)
+            {
+                _disableSmartAppControl = true;
+                Properties.Settings.Default.DisableSmartAppControl = true;
+                Properties.Settings.Default.DisableSmartScreen = false;
+                Properties.Settings.Default.Save();
+            }
             _disableUAC = Properties.Settings.Default.DisableUAC;
             _disableWindowsUpdate = Properties.Settings.Default.DisableWindowsUpdate;
         }
@@ -502,7 +509,8 @@ namespace WindowLocker.ViewModels
                 SystemManager.SetPowerShellEnabled(!DisablePowerShell);
                 SecurityManager.SetRegistryEditorEnabled(!DisableRegistryEditor);
                 SecurityManager.SetAdministratorAccountEnabled(!DisableAdministrator);
-                SecurityManager.SetSmartScreenEnabled(!DisableSmartScreen);
+                SecurityManager.SetSmartScreenEnabled(!DisableSmartAppControl);
+                SecurityManager.SetSmartAppControlEnabled(!DisableSmartAppControl);
                 SecurityManager.SetUACEnabled(!DisableUAC);
                                     
                 if (MainWindow.Instance.IsVisible)
@@ -537,10 +545,13 @@ namespace WindowLocker.ViewModels
                 }
     
                 SystemManager.ApplySignageSettings();
+                DisableSmartAppControl = true;
+                SecurityManager.SetSmartScreenEnabled(false);
+                SecurityManager.SetSmartAppControlEnabled(false);
                 
                 if (MainWindow.Instance.IsVisible)
                     MessageBox.Show(MainWindow.Instance,
-					(string)Application.Current.FindResource("MsgSignageSettingsSuccess"),
+						(string)Application.Current.FindResource("MsgSignageSettingsSuccess"),
                     (string)Application.Current.FindResource("MsgSuccess"),
                     MessageBoxButton.OK, 
                     MessageBoxImage.Information);
@@ -564,7 +575,7 @@ namespace WindowLocker.ViewModels
                 BlackBackground = true;
                 HideDesktopIcons = true;
                 HideTaskbar = true;
-                DisableSmartScreen = true;
+                DisableSmartAppControl = true;
                 DisableUAC = true;
                 DisableSettingsApp = true;
                 DisableTaskManager = true;
@@ -610,7 +621,7 @@ namespace WindowLocker.ViewModels
                 DisablePowerShell = false;
                 DisableRegistryEditor = false;
                 DisableAdministrator = false;
-                DisableSmartScreen = false;
+                DisableSmartAppControl = false;
                 DisableUAC = false;
                 IsSystemLocked = false;
             }));

@@ -243,6 +243,59 @@ namespace WindowLocker.Managers
             }
         }
 
+        public static void SetSmartAppControlEnabled(bool enabled)
+        {
+            try
+            {
+                using (RegistryKey key = Registry.LocalMachine.CreateSubKey(@"SYSTEM\CurrentControlSet\Control\CI\Policy", true))
+                {
+                    if (key == null)
+                    {
+                        throw new Exception("Failed to open Smart App Control policy registry key");
+                    }
+
+                    if (!enabled)
+                    {
+                        key.SetValue("VerifiedAndReputablePolicyState", 0, RegistryValueKind.DWord);
+                    }
+                    else
+                    {
+                        key.DeleteValue("VerifiedAndReputablePolicyState", false);
+                    }
+                }
+
+                RefreshCodeIntegrityPolicy();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error setting Smart App Control: {ex.Message}");
+                throw;
+            }
+        }
+
+        private static void RefreshCodeIntegrityPolicy()
+        {
+            try
+            {
+                ProcessStartInfo startInfo = new ProcessStartInfo
+                {
+                    FileName = "citool.exe",
+                    Arguments = "-r",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                using (Process process = Process.Start(startInfo))
+                {
+                    process.WaitForExit();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Failed to refresh code integrity policy: {ex.Message}");
+            }
+        }
+
         public static void SetUACEnabled(bool enabled)
         {
             try

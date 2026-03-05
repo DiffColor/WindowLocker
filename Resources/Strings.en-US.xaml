@@ -37,8 +37,10 @@
     <system:String x:Key="DisableRemoteDesktop">Disable Remote Desktop</system:String>
     <system:String x:Key="DisableWindowsUpdate">Disable Windows Update</system:String>
     <system:String x:Key="DisableSmartScreen">Disable Windows SmartScreen</system:String>
+    <system:String x:Key="DisableSmartAppControl">Disable Smart App Control</system:String>
     <system:String x:Key="DisableUAC">Disable User Account Control (UAC)</system:String>
     <system:String x:Key="MsgSmartScreenWarning">Disabling SmartScreen may make your system vulnerable.</system:String>
+    <system:String x:Key="MsgSmartAppControlWarning">Disabling Smart App Control may reduce system security.</system:String>
     <system:String x:Key="MsgUACWarning">Disabling UAC may reduce system security.</system:String>
     <!-- Message Box Strings -->
     <!-- Remove MsgControlPanelSuccess and MsgControlPanelError -->

@@ -230,6 +230,18 @@ namespace WindowLocker.Properties {
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool DisableSmartAppControl {
+            get {
+                return ((bool)(this["DisableSmartAppControl"]));
+            }
+            set {
+                this["DisableSmartAppControl"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
         public bool DisableUAC {
             get {
                 return ((bool)(this["DisableUAC"]));
