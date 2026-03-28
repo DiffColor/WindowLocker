@@ -37,6 +37,21 @@ namespace WindowLocker.ViewModels
 
         public PasswordBox AutoLoginPasswordBox { get; set; }
         public bool ShowRestartAsAdmin { get; set; } = false;
+        private bool _isApplyingProtectedSettings;
+
+        public bool IsApplyingProtectedSettings
+        {
+            get => _isApplyingProtectedSettings;
+            private set
+            {
+                if (_isApplyingProtectedSettings != value)
+                {
+                    _isApplyingProtectedSettings = value;
+                    OnPropertyChanged(nameof(IsApplyingProtectedSettings));
+                    CommandManager.InvalidateRequerySuggested();
+                }
+            }
+        }
 
         // Settings properties
         private bool _blackBackground;
@@ -322,8 +337,8 @@ namespace WindowLocker.ViewModels
         {
             ApplyDesktopSettingsCommand = new RelayCommand(ApplyDesktopSettings);
             ApplySystemControlsCommand = new RelayCommand(ApplySystemControls);
-            ApplySecuritySettingsCommand = new RelayCommand(ApplySecuritySettings);
-            ApplySignageSettingsCommand = new RelayCommand(ApplySignageSettings);
+            ApplySecuritySettingsCommand = new RelayCommand(async () => await ApplySecuritySettingsAsync(), CanApplyProtectedSettings);
+            ApplySignageSettingsCommand = new RelayCommand(async () => await ApplySignageSettingsAsync(), CanApplyProtectedSettings);
             RestartAsAdminCommand = new RelayCommand(RestartAsAdmin);
             ApplyAutoLoginSettingsCommand = new RelayCommand(ApplyAutoLoginSettings);
 
@@ -488,14 +503,143 @@ namespace WindowLocker.ViewModels
             if (AutoLoginPasswordBox != null)
 				AutoLoginPassword = AutoLoginPasswordBox.Password;
 		}
+
+        private bool CanApplyProtectedSettings()
+        {
+            return !IsApplyingProtectedSettings;
+        }
+
+        private bool EnsureAdminPrivileges()
+        {
+            if (SystemUtilities.IsRunningAsAdmin())
+            {
+                return true;
+            }
+
+            if (MainWindow.Instance.IsVisible)
+            {
+                MessageBox.Show(MainWindow.Instance,
+                    (string)Application.Current.FindResource("MsgAdminRequired"),
+                    (string)Application.Current.FindResource("MsgWarning"),
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+
+            return false;
+        }
+
+        private async Task<bool> RunProtectedSettingsOperationAsync(Action operation, Action onBeforeRun = null)
+        {
+            if (IsApplyingProtectedSettings)
+            {
+                return false;
+            }
+
+            onBeforeRun?.Invoke();
+
+            IsApplyingProtectedSettings = true;
+            Mouse.OverrideCursor = Cursors.Wait;
+
+            try
+            {
+                await Task.Run(operation);
+                return true;
+            }
+            finally
+            {
+                Mouse.OverrideCursor = null;
+                IsApplyingProtectedSettings = false;
+            }
+        }
+
+        public async Task ApplySecuritySettingsAsync()
+        {
+            if (!EnsureAdminPrivileges())
+            {
+                return;
+            }
+
+            try
+            {
+                bool completed = await RunProtectedSettingsOperationAsync(() => ApplySecuritySettings(showMessages: false));
+                if (!completed)
+                {
+                    return;
+                }
+
+                if (MainWindow.Instance.IsVisible)
+                {
+                    MessageBox.Show(MainWindow.Instance,
+                        (string)Application.Current.FindResource("MsgSecuritySuccess"),
+                        (string)Application.Current.FindResource("MsgSuccess"),
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                if (MainWindow.Instance.IsVisible)
+                {
+                    MessageBox.Show(MainWindow.Instance,
+                        string.Format((string)Application.Current.FindResource("MsgSecurityError"), ex.Message),
+                        (string)Application.Current.FindResource("MsgError"),
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
+            }
+        }
+
+        public async Task ApplySignageSettingsAsync()
+        {
+            if (!EnsureAdminPrivileges())
+            {
+                return;
+            }
+
+            try
+            {
+                bool completed = await RunProtectedSettingsOperationAsync(
+                    () => ApplySignageSettings(showMessages: false),
+                    () => DisableSmartAppControl = true);
+                if (!completed)
+                {
+                    return;
+                }
+
+                if (MainWindow.Instance.IsVisible)
+                {
+                    MessageBox.Show(MainWindow.Instance,
+                        (string)Application.Current.FindResource("MsgSignageSettingsSuccess"),
+                        (string)Application.Current.FindResource("MsgSuccess"),
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                if (MainWindow.Instance.IsVisible)
+                {
+                    MessageBox.Show(MainWindow.Instance,
+                        string.Format((string)Application.Current.FindResource("MsgSignageSettingsError"), ex.Message),
+                        (string)Application.Current.FindResource("MsgError"),
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
+            }
+        }
     
         public void ApplySecuritySettings()
+        {
+            ApplySecuritySettings(showMessages: true);
+        }
+
+        private void ApplySecuritySettings(bool showMessages)
         {
             try
             {
                 if (!SystemUtilities.IsRunningAsAdmin())
                 {
-                    if (MainWindow.Instance.IsVisible)
+                    if (showMessages && MainWindow.Instance.IsVisible)
                         MessageBox.Show(MainWindow.Instance,
 							(string)Application.Current.FindResource("MsgAdminRequired"),
                             (string)Application.Current.FindResource("MsgWarning"),
@@ -513,7 +657,7 @@ namespace WindowLocker.ViewModels
                 SecurityManager.SetSmartAppControlEnabled(!DisableSmartAppControl);
                 SecurityManager.SetUACEnabled(!DisableUAC);
                                     
-                if (MainWindow.Instance.IsVisible)
+                if (showMessages && MainWindow.Instance.IsVisible)
                     MessageBox.Show(MainWindow.Instance,
 						(string)Application.Current.FindResource("MsgSecuritySuccess"),
                         (string)Application.Current.FindResource("MsgSuccess"),
@@ -522,25 +666,40 @@ namespace WindowLocker.ViewModels
             }
             catch (Exception ex)
             {
-                if (MainWindow.Instance.IsVisible)
+                if (showMessages && MainWindow.Instance.IsVisible)
+                {
                     MessageBox.Show(MainWindow.Instance,
-					string.Format((string)Application.Current.FindResource("MsgSecurityError"), ex.Message),
-                    (string)Application.Current.FindResource("MsgError"),
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+					    string.Format((string)Application.Current.FindResource("MsgSecurityError"), ex.Message),
+                        (string)Application.Current.FindResource("MsgError"),
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
+                else
+                {
+                    throw;
+                }
             }
         }
         public void ApplySignageSettings()
+        {
+            ApplySignageSettings(showMessages: true);
+        }
+
+        private void ApplySignageSettings(bool showMessages)
         {
             try
             {
                 if (!SystemUtilities.IsRunningAsAdmin())
                 {
-                    MessageBox.Show(MainWindow.Instance,
+                    if (showMessages && MainWindow.Instance.IsVisible)
+                    {
+                        MessageBox.Show(MainWindow.Instance,
 						(string)Application.Current.FindResource("MsgAdminRequired"),
                         (string)Application.Current.FindResource("MsgWarning"),
-                        MessageBoxButton.OK, 
+                        MessageBoxButton.OK,
                         MessageBoxImage.Warning);
+                    }
+
                     return;
                 }
     
@@ -549,7 +708,7 @@ namespace WindowLocker.ViewModels
                 SecurityManager.SetSmartScreenEnabled(false);
                 SecurityManager.SetSmartAppControlEnabled(false);
                 
-                if (MainWindow.Instance.IsVisible)
+                if (showMessages && MainWindow.Instance.IsVisible)
                     MessageBox.Show(MainWindow.Instance,
 						(string)Application.Current.FindResource("MsgSignageSettingsSuccess"),
                     (string)Application.Current.FindResource("MsgSuccess"),
@@ -558,12 +717,18 @@ namespace WindowLocker.ViewModels
             }
             catch (Exception ex)
             {
-                if (MainWindow.Instance.IsVisible)
+                if (showMessages && MainWindow.Instance.IsVisible)
+                {
                     MessageBox.Show(MainWindow.Instance,
-					string.Format((string)Application.Current.FindResource("MsgSignageSettingsError"), ex.Message),
-                    (string)Application.Current.FindResource("MsgError"),
-                    MessageBoxButton.OK, 
-                    MessageBoxImage.Error);
+					    string.Format((string)Application.Current.FindResource("MsgSignageSettingsError"), ex.Message),
+                        (string)Application.Current.FindResource("MsgError"),
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
+                else
+                {
+                    throw;
+                }
             }
         }
 

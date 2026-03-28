@@ -12,6 +12,8 @@ namespace WindowLocker.Managers
 {
     public static class SecurityManager
     {
+        private const int DefaultProcessTimeoutMilliseconds = 30000;
+
         /// <summary>
         /// Enables or disables the Registry Editor
         /// </summary>
@@ -114,21 +116,11 @@ namespace WindowLocker.Managers
         {
             try
             {
-                // Administrator 계정 활성화/비활성화
-                Process process = new Process();
-                process.StartInfo.FileName = "net";
-                process.StartInfo.Arguments = $"user Administrator /active:{(enabled ? "yes" : "no")}";
-                process.StartInfo.UseShellExecute = false;
-                process.StartInfo.CreateNoWindow = true;
-                process.StartInfo.Verb = "runas"; // 관리자 권한으로 실행
-
-                process.Start();
-                process.WaitForExit();
-
-                if (process.ExitCode != 0)
-                {
-                    throw new Exception("Failed to modify Administrator account status");
-                }
+                RunProcess(
+                    "net",
+                    $"user Administrator /active:{(enabled ? "yes" : "no")}",
+                    DefaultProcessTimeoutMilliseconds,
+                    "Administrator account state update");
             }
             catch (Exception ex)
             {
@@ -162,34 +154,20 @@ namespace WindowLocker.Managers
                 if (enabled && !string.IsNullOrEmpty(username))
                 {
                     // 자동 로그인 활성화
-                    ProcessStartInfo startInfo = new ProcessStartInfo
-                    {
-                        FileName = exePath,
-                        Arguments = $"/accepteula \"{username}\" \"\" \"{password}\"",
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    };
-                    
-                    using (Process process = Process.Start(startInfo))
-                    {
-                        process.WaitForExit();
-                    }
+                    RunProcess(
+                        exePath,
+                        $"/accepteula \"{username}\" \"\" \"{password}\"",
+                        DefaultProcessTimeoutMilliseconds,
+                        "Auto login enable");
                 }
                 else
                 {
                     // 자동 로그인 비활성화
-                    ProcessStartInfo startInfo = new ProcessStartInfo
-                    {
-                        FileName = exePath,
-                        Arguments = "/accepteula /disable",
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    };
-                    
-                    using (Process process = Process.Start(startInfo))
-                    {
-                        process.WaitForExit();
-                    }
+                    RunProcess(
+                        exePath,
+                        "/accepteula /disable",
+                        DefaultProcessTimeoutMilliseconds,
+                        "Auto login disable");
                 }
             }
             catch (Exception ex)
@@ -277,22 +255,55 @@ namespace WindowLocker.Managers
         {
             try
             {
-                ProcessStartInfo startInfo = new ProcessStartInfo
-                {
-                    FileName = "citool.exe",
-                    Arguments = "-r",
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                using (Process process = Process.Start(startInfo))
-                {
-                    process.WaitForExit();
-                }
+                RunProcess(
+                    "citool.exe",
+                    "-r",
+                    DefaultProcessTimeoutMilliseconds,
+                    "Code integrity policy refresh");
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"Failed to refresh code integrity policy: {ex.Message}");
+                throw;
+            }
+        }
+
+        private static void RunProcess(string fileName, string arguments, int timeoutMilliseconds, string operationName)
+        {
+            ProcessStartInfo startInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using (Process process = new Process { StartInfo = startInfo })
+            {
+                if (!process.Start())
+                {
+                    throw new Exception($"{operationName} process failed to start");
+                }
+
+                if (!process.WaitForExit(timeoutMilliseconds))
+                {
+                    try
+                    {
+                        process.Kill();
+                        process.WaitForExit(5000);
+                    }
+                    catch (Exception killEx)
+                    {
+                        Debug.WriteLine($"Failed to stop timed out process for {operationName}: {killEx.Message}");
+                    }
+
+                    throw new TimeoutException($"{operationName} timed out after {timeoutMilliseconds / 1000} seconds");
+                }
+
+                if (process.ExitCode != 0)
+                {
+                    throw new Exception($"{operationName} failed with exit code {process.ExitCode}");
+                }
             }
         }
 

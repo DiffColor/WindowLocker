@@ -327,9 +327,9 @@ namespace WindowLocker.Views
             }
         }
 
-        private void ApplySignageSettings_Click(object sender, RoutedEventArgs e)
+        private async void ApplySignageSettings_Click(object sender, RoutedEventArgs e)
         {
-            MainWindow.Instance.sViewModel.ApplySignageSettings();
+            await MainWindow.Instance.sViewModel.ApplySignageSettingsAsync();
             UpdateSignageButtonState();
         }
 
