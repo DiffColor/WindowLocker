@@ -17,6 +17,7 @@ namespace WindowLocker.Managers
     public static class SystemManager
     {
         private static Timer _taskbarCheckTimer;
+        private const int SignageLogPixels = 96;
         
         public static void SetTaskbarEnabled(bool enabled)
         {
@@ -426,13 +427,7 @@ namespace WindowLocker.Managers
                     key.SetValue("AwayModeEnabled", 1, RegistryValueKind.DWord);
                 }
 
-                // Desktop Settings
-                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Control Panel\Desktop", true))
-                {
-                    key.SetValue("DelayLockInterval", 0, RegistryValueKind.DWord);
-                    key.SetValue("LogPixels", 96, RegistryValueKind.DWord);
-                    key.SetValue("Win8DpiScaling", 0, RegistryValueKind.DWord);
-                }
+                ApplySignageDesktopScaling();
 
                 // 주모니터에만 작업표시줄 표시 설정
                 using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StuckRects3", true))
@@ -968,6 +963,49 @@ namespace WindowLocker.Managers
         }
         
         /// <summary>
+        /// 사이니지 100% 배율 설정이 현재 적용되어 있는지 확인합니다.
+        /// </summary>
+        public static bool IsSignageScalingApplied()
+        {
+            try
+            {
+                using (RegistryKey desktopKey = Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop"))
+                {
+                    if (desktopKey == null ||
+                        !TryGetDwordValue(desktopKey, "DelayLockInterval", out int delayLockInterval) || delayLockInterval != 0 ||
+                        !TryGetDwordValue(desktopKey, "LogPixels", out int logPixels) || logPixels != SignageLogPixels ||
+                        !TryGetDwordValue(desktopKey, "Win8DpiScaling", out int win8DpiScaling) || win8DpiScaling != 1)
+                    {
+                        return false;
+                    }
+                }
+
+                using (RegistryKey windowMetricsKey = Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop\WindowMetrics"))
+                {
+                    if (windowMetricsKey == null ||
+                        !TryGetDwordValue(windowMetricsKey, "AppliedDPI", out int appliedDpi) || appliedDpi != SignageLogPixels)
+                    {
+                        return false;
+                    }
+                }
+
+                using (RegistryKey perMonitorSettingsKey = Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop\PerMonitorSettings"))
+                {
+                    if (perMonitorSettingsKey != null && perMonitorSettingsKey.SubKeyCount > 0)
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
         /// 탐색기 프로세스를 재시작합니다.
         /// </summary>
         private static void RestartExplorer()
@@ -991,6 +1029,50 @@ namespace WindowLocker.Managers
             catch (Exception ex)
             {
                 Debug.WriteLine($"탐색기 재시작 중 오류 발생: {ex.Message}");
+            }
+        }
+
+        private static void ApplySignageDesktopScaling()
+        {
+            using (RegistryKey desktopKey = Registry.CurrentUser.CreateSubKey(@"Control Panel\Desktop", true))
+            {
+                desktopKey.SetValue("DelayLockInterval", 0, RegistryValueKind.DWord);
+                desktopKey.SetValue("LogPixels", SignageLogPixels, RegistryValueKind.DWord);
+                desktopKey.SetValue("Win8DpiScaling", 1, RegistryValueKind.DWord);
+            }
+
+            using (RegistryKey windowMetricsKey = Registry.CurrentUser.CreateSubKey(@"Control Panel\Desktop\WindowMetrics", true))
+            {
+                windowMetricsKey.SetValue("AppliedDPI", SignageLogPixels, RegistryValueKind.DWord);
+            }
+
+            Registry.CurrentUser.DeleteSubKeyTree(@"Control Panel\Desktop\PerMonitorSettings", false);
+        }
+
+        private static bool TryGetDwordValue(RegistryKey key, string valueName, out int value)
+        {
+            value = 0;
+
+            object rawValue = key.GetValue(valueName);
+            if (rawValue == null)
+            {
+                return false;
+            }
+
+            if (rawValue is int intValue)
+            {
+                value = intValue;
+                return true;
+            }
+
+            try
+            {
+                value = Convert.ToInt32(rawValue);
+                return true;
+            }
+            catch
+            {
+                return false;
             }
         }
 

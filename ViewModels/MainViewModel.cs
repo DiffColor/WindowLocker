@@ -278,6 +278,22 @@ namespace WindowLocker.ViewModels
             }
         }
 
+        private bool _disableSmartScreen;
+        public bool DisableSmartScreen
+        {
+            get => _disableSmartScreen;
+            set
+            {
+                if (_disableSmartScreen != value)
+                {
+                    _disableSmartScreen = value;
+                    Properties.Settings.Default.DisableSmartScreen = value;
+                    Properties.Settings.Default.Save();
+                    OnPropertyChanged(nameof(DisableSmartScreen));
+                }
+            }
+        }
+
         private bool _disableSmartAppControl;
         public bool DisableSmartAppControl
         {
@@ -417,12 +433,13 @@ namespace WindowLocker.ViewModels
             _enableAutoLogin = Properties.Settings.Default.EnableAutoLogin;
             _autoLoginUsername = Properties.Settings.Default.AutoLoginUsername;
             _autoLoginPassword = Properties.Settings.Default.AutoLoginPassword;
+            _disableSmartScreen = Properties.Settings.Default.DisableSmartScreen;
             _disableSmartAppControl = Properties.Settings.Default.DisableSmartAppControl;
-            if (!_disableSmartAppControl && Properties.Settings.Default.DisableSmartScreen)
+
+            if (_disableSmartAppControl && !_disableSmartScreen)
             {
-                _disableSmartAppControl = true;
-                Properties.Settings.Default.DisableSmartAppControl = true;
-                Properties.Settings.Default.DisableSmartScreen = false;
+                _disableSmartScreen = true;
+                Properties.Settings.Default.DisableSmartScreen = true;
                 Properties.Settings.Default.Save();
             }
             _disableUAC = Properties.Settings.Default.DisableUAC;
@@ -600,7 +617,11 @@ namespace WindowLocker.ViewModels
             {
                 bool completed = await RunProtectedSettingsOperationAsync(
                     () => ApplySignageSettings(showMessages: false),
-                    () => DisableSmartAppControl = true);
+                    () =>
+                    {
+                        DisableSmartScreen = true;
+                        DisableSmartAppControl = true;
+                    });
                 if (!completed)
                 {
                     return;
@@ -609,7 +630,7 @@ namespace WindowLocker.ViewModels
                 if (MainWindow.Instance.IsVisible)
                 {
                     MessageBox.Show(MainWindow.Instance,
-                        (string)Application.Current.FindResource("MsgSignageSettingsSuccess"),
+                        GetSignageSettingsSuccessMessage(),
                         (string)Application.Current.FindResource("MsgSuccess"),
                         MessageBoxButton.OK,
                         MessageBoxImage.Information);
@@ -653,7 +674,7 @@ namespace WindowLocker.ViewModels
                 SystemManager.SetPowerShellEnabled(!DisablePowerShell);
                 SecurityManager.SetRegistryEditorEnabled(!DisableRegistryEditor);
                 SecurityManager.SetAdministratorAccountEnabled(!DisableAdministrator);
-                SecurityManager.SetSmartScreenEnabled(!DisableSmartAppControl);
+                SecurityManager.SetSmartScreenEnabled(!DisableSmartScreen);
                 SecurityManager.SetSmartAppControlEnabled(!DisableSmartAppControl);
                 SecurityManager.SetUACEnabled(!DisableUAC);
                                     
@@ -704,13 +725,14 @@ namespace WindowLocker.ViewModels
                 }
     
                 SystemManager.ApplySignageSettings();
+                DisableSmartScreen = true;
                 DisableSmartAppControl = true;
                 SecurityManager.SetSmartScreenEnabled(false);
                 SecurityManager.SetSmartAppControlEnabled(false);
                 
                 if (showMessages && MainWindow.Instance.IsVisible)
                     MessageBox.Show(MainWindow.Instance,
-						(string)Application.Current.FindResource("MsgSignageSettingsSuccess"),
+						GetSignageSettingsSuccessMessage(),
                     (string)Application.Current.FindResource("MsgSuccess"),
                     MessageBoxButton.OK, 
                     MessageBoxImage.Information);
@@ -732,6 +754,14 @@ namespace WindowLocker.ViewModels
             }
         }
 
+        private string GetSignageSettingsSuccessMessage()
+        {
+            return string.Join(
+                Environment.NewLine,
+                (string)Application.Current.FindResource("MsgSignageSettingsSuccess"),
+                (string)Application.Current.FindResource("MsgSignageSettingsReloginRequired"));
+        }
+
         public void EnablePreventHack()
         {
             Application.Current.Dispatcher.Invoke(new Action(() =>
@@ -740,6 +770,7 @@ namespace WindowLocker.ViewModels
                 BlackBackground = true;
                 HideDesktopIcons = true;
                 HideTaskbar = true;
+                DisableSmartScreen = true;
                 DisableSmartAppControl = true;
                 DisableUAC = true;
                 DisableSettingsApp = true;
@@ -782,6 +813,7 @@ namespace WindowLocker.ViewModels
                 DisableHardwareAcceleration = false;
                 DisableRemoteDesktop = false;
                 DisableWindowsUpdate = false;
+                DisableSmartScreen = false;
                 DisableCommandPrompt = false;
                 DisablePowerShell = false;
                 DisableRegistryEditor = false;

@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Microsoft.Win32;
+using WindowLocker.Managers;
 using WindowLocker.ViewModels;
 
 namespace WindowLocker.Views
@@ -55,14 +56,8 @@ namespace WindowLocker.Views
                 }
 
                 // 3. 데스크톱 설정 확인
-                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop"))
-                {
-                    if (key == null || 
-                        key.GetValue("DelayLockInterval") == null || (int)key.GetValue("DelayLockInterval") != 0 ||
-                        key.GetValue("LogPixels") == null || (int)key.GetValue("LogPixels") != 96 ||
-                        key.GetValue("Win8DpiScaling") == null || (int)key.GetValue("Win8DpiScaling") != 0)
-                        isAnySettingNotApplied = true;
-                }
+                if (!SystemManager.IsSignageScalingApplied())
+                    isAnySettingNotApplied = true;
 
                 // 4. 작업표시줄 설정 확인
                 using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"))

@@ -86,6 +86,7 @@
     <system:String x:Key="SignageSettings">사이니지 기본 설정</system:String>
     <system:String x:Key="ApplySignageSettings">사이니지 설정 적용</system:String>
     <system:String x:Key="MsgSignageSettingsSuccess">사이니지 설정이 적용되었습니다!</system:String>
+    <system:String x:Key="MsgSignageSettingsReloginRequired">적용 후 Windows에 다시 로그인하면 100% 배율이 완전히 반영됩니다.</system:String>
     <system:String x:Key="MsgSignageSettingsError">사이니지 설정 적용 중 오류 발생: {0}</system:String>
     <system:String x:Key="HackingPrevention">해킹 방지</system:String>
     <system:String x:Key="DetailedSettings">세부 설정</system:String>

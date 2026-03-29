@@ -92,6 +92,7 @@ Warning: Use with caution. Disabling certain system features may affect system f
     <system:String x:Key="MsgSignageEnvironmentError">Error applying signage environment settings: {0}</system:String>
     <system:String x:Key="MsgSignageSettingsError">Error applying signage settings: {0}</system:String>
     <system:String x:Key="MsgSignageSettingsSuccess">Signage settings applied successfully!</system:String>
+    <system:String x:Key="MsgSignageSettingsReloginRequired">Sign out and sign back in to fully apply display scaling.</system:String>
     <system:String x:Key="DetailedSettings">Detailed Settings</system:String>
     <!-- Auto Login Messages -->
     <system:String x:Key="ApplyAutoLoginSettings">Apply Auto Login Settings</system:String>

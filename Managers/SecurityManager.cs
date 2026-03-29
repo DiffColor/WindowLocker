@@ -191,34 +191,101 @@ namespace WindowLocker.Managers
         {
             try
             {
-                using (RegistryKey key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Policies\Microsoft\Windows\System", true))
-                {
-                    if (!enabled)
-                    {
-                        key.SetValue("EnableSmartScreen", 0, RegistryValueKind.DWord);
-                    }
-                    else
-                    {
-                        key.DeleteValue("EnableSmartScreen", false);
-                    }
-                }
-
-                using (RegistryKey key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", true))
-                {
-                    if (!enabled)
-                    {
-                        key.SetValue("SmartScreenEnabled", "Off", RegistryValueKind.String);
-                    }
-                    else
-                    {
-                        key.SetValue("SmartScreenEnabled", "On", RegistryValueKind.String);
-                    }
-                }
+                SetWindowsShellSmartScreenPolicy(enabled);
+                SetWindowsExplorerSmartScreenState(enabled);
+                SetWindowsAppInstallControlPolicy(enabled);
+                SetStoreAppsSmartScreenState(enabled);
+                SetLegacyEdgeSmartScreenPolicy(enabled);
+                SetChromiumEdgeSmartScreenPolicy(enabled);
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"Error setting SmartScreen: {ex.Message}");
                 throw;
+            }
+        }
+
+        private static void SetWindowsShellSmartScreenPolicy(bool enabled)
+        {
+            using (RegistryKey key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Policies\Microsoft\Windows\System", true))
+            {
+                if (!enabled)
+                {
+                    key.SetValue("EnableSmartScreen", 0, RegistryValueKind.DWord);
+                }
+                else
+                {
+                    key.DeleteValue("EnableSmartScreen", false);
+                }
+            }
+        }
+
+        private static void SetWindowsExplorerSmartScreenState(bool enabled)
+        {
+            using (RegistryKey key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", true))
+            {
+                key.SetValue("SmartScreenEnabled", enabled ? "Warn" : "Off", RegistryValueKind.String);
+            }
+        }
+
+        private static void SetWindowsAppInstallControlPolicy(bool enabled)
+        {
+            using (RegistryKey key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Policies\Microsoft\Windows Defender\SmartScreen", true))
+            {
+                if (!enabled)
+                {
+                    key.SetValue("ConfigureAppInstallControlEnabled", 1, RegistryValueKind.DWord);
+                    key.SetValue("ConfigureAppInstallControl", "Anywhere", RegistryValueKind.String);
+                }
+                else
+                {
+                    key.DeleteValue("ConfigureAppInstallControlEnabled", false);
+                    key.DeleteValue("ConfigureAppInstallControl", false);
+                }
+            }
+        }
+
+        private static void SetStoreAppsSmartScreenState(bool enabled)
+        {
+            using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\AppHost", true))
+            {
+                key.SetValue("EnableWebContentEvaluation", enabled ? 1 : 0, RegistryValueKind.DWord);
+            }
+        }
+
+        private static void SetLegacyEdgeSmartScreenPolicy(bool enabled)
+        {
+            using (RegistryKey key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Policies\Microsoft\MicrosoftEdge\PhishingFilter", true))
+            {
+                if (!enabled)
+                {
+                    key.SetValue("EnabledV9", 0, RegistryValueKind.DWord);
+                    key.SetValue("PreventOverride", 0, RegistryValueKind.DWord);
+                    key.SetValue("PreventOverrideAppRepUnknown", 0, RegistryValueKind.DWord);
+                }
+                else
+                {
+                    key.DeleteValue("EnabledV9", false);
+                    key.DeleteValue("PreventOverride", false);
+                    key.DeleteValue("PreventOverrideAppRepUnknown", false);
+                }
+            }
+        }
+
+        private static void SetChromiumEdgeSmartScreenPolicy(bool enabled)
+        {
+            using (RegistryKey key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Policies\Microsoft\Edge", true))
+            {
+                if (!enabled)
+                {
+                    key.SetValue("SmartScreenEnabled", 0, RegistryValueKind.DWord);
+                    key.SetValue("SmartScreenPuaEnabled", 0, RegistryValueKind.DWord);
+                }
+                else
+                {
+                    key.DeleteValue("SmartScreenEnabled", false);
+                    key.DeleteValue("SmartScreenPuaEnabled", false);
+                }
             }
         }
 
