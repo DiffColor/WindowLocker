@@ -13,6 +13,7 @@ namespace WindowLocker.Managers
     public static class SecurityManager
     {
         private const int DefaultProcessTimeoutMilliseconds = 30000;
+        private const int BackgroundProcessStartupTimeoutMilliseconds = 2000;
 
         /// <summary>
         /// Enables or disables the Registry Editor
@@ -255,10 +256,12 @@ namespace WindowLocker.Managers
         {
             try
             {
-                RunProcess(
+                // `citool.exe -r` can keep running after the refresh request is accepted.
+                // Waiting for full exit turns a successful request into a needless timeout.
+                RunProcessUntilStartedOrExited(
                     "citool.exe",
                     "-r",
-                    DefaultProcessTimeoutMilliseconds,
+                    BackgroundProcessStartupTimeoutMilliseconds,
                     "Code integrity policy refresh");
             }
             catch (Exception ex)
@@ -304,6 +307,37 @@ namespace WindowLocker.Managers
                 {
                     throw new Exception($"{operationName} failed with exit code {process.ExitCode}");
                 }
+            }
+        }
+
+        private static void RunProcessUntilStartedOrExited(string fileName, string arguments, int startupTimeoutMilliseconds, string operationName)
+        {
+            ProcessStartInfo startInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using (Process process = new Process { StartInfo = startInfo })
+            {
+                if (!process.Start())
+                {
+                    throw new Exception($"{operationName} process failed to start");
+                }
+
+                if (process.WaitForExit(startupTimeoutMilliseconds))
+                {
+                    if (process.ExitCode != 0)
+                    {
+                        throw new Exception($"{operationName} failed with exit code {process.ExitCode}");
+                    }
+
+                    return;
+                }
+
+                Debug.WriteLine($"{operationName} is still running after {startupTimeoutMilliseconds} ms. Continuing without waiting for exit.");
             }
         }
 
