@@ -3,186 +3,157 @@ name: WindowLocker Release Build
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
+
+env:
+  SOLUTION_FILE: WindowLocker.sln
+  BUILD_CONFIGURATION: Release
+  BUILD_PLATFORM: x64
+  BUILD_OUTPUT_DIR: bin\x64\Release
 
 jobs:
   build:
     runs-on: windows-latest
-    # GitHub 릴리즈를 위한 권한 추가
     permissions:
       contents: write
     outputs:
       version: ${{ steps.set_version.outputs.version }}
       artifact_name: ${{ steps.set_artifact_name.outputs.artifact_name }}
-    
+
     steps:
-    - name: 코드 체크아웃
-      uses: actions/checkout@v3
-      
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v1.3
-      
-    - name: Setup NuGet
-      uses: NuGet/setup-nuget@v1.2.0
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: NuGet 패키지 복원
-      run: nuget restore WindowLocker.sln
-      
-    - name: 빌드 버전 설정
-      id: set_version
-      run: |
-        if ("${{ github.ref_type }}" -eq "tag") {
-          $VERSION = "${{ github.ref_name }}".TrimStart("v")
-          echo "version=$VERSION" >> $env:GITHUB_OUTPUT
-        } else {
-          $TODAY = Get-Date -Format "yyyy.MM.dd"
-          $SHORT_SHA = "${{ github.sha }}".Substring(0, 7)
-          $VERSION = "$TODAY-$SHORT_SHA"
-          echo "version=$VERSION" >> $env:GITHUB_OUTPUT
-        }
-      shell: pwsh
-      
-    - name: 아티팩트 이름 설정
-      id: set_artifact_name
-      run: |
-        $VERSION = "${{ steps.set_version.outputs.version }}"
-        echo "artifact_name=WindowLocker-$VERSION-Release" >> $env:GITHUB_OUTPUT
-        echo "zip_name=WindowLocker-$VERSION.zip" >> $env:GITHUB_OUTPUT
-        echo "installer_name=WindowLocker-Setup-$VERSION.exe" >> $env:GITHUB_OUTPUT
-      shell: pwsh
-      
-    - name: Release 빌드
-      run: msbuild WindowLocker.sln /p:Configuration=Release /p:Platform="Any CPU"
-      
-    - name: 빌드 결과물 확인
-      run: |
-        echo "빌드 결과물 디렉터리 확인 중..."
-        echo "작업 공간 경로: $(Get-Location)"
-        
-        # 모든 *.exe 및 *.dll 파일 검색
-        echo "모든 EXE 및 DLL 파일 검색:"
-        Get-ChildItem -Path . -Include *.exe, *.dll -Recurse | Select-Object FullName
-        
-        if (Test-Path -Path "bin") {
-          echo "bin 디렉터리 존재, 내용 출력:"
-          Get-ChildItem -Path "bin" -Recurse | Select-Object FullName
-          
-          if (Test-Path -Path "bin\Release") {
-            echo "Release 폴더 내용:"
-            Get-ChildItem -Path "bin\Release" -Recurse | Select-Object Name, Length, LastWriteTime
-          }
-        } else {
-          echo "bin 디렉터리가 없습니다."
-          echo "현재 디렉터리 구조:"
-          Get-ChildItem -Recurse -Depth 2 | Select-Object FullName
-        }
-      shell: pwsh
-      
-    # 빌드된 파일을 특정 폴더로 복사
-    - name: 릴리스 파일 준비
-      id: prepare_release
-      run: |
-        # 릴리스 디렉토리 생성
-        $RELEASE_DIR = "ReleaseFiles"
-        New-Item -Path $RELEASE_DIR -ItemType Directory -Force
-        
-        # 모든 빌드 결과물 복사
-        $exeFiles = Get-ChildItem -Path . -Include "WindowLocker.exe" -Recurse
-        $dllFiles = Get-ChildItem -Path . -Include "*.dll" -Recurse -Exclude "*Test*.dll"
-        
-        if ($exeFiles.Count -gt 0) {
-          echo "EXE 파일을 릴리스 디렉터리로 복사합니다."
-          foreach ($file in $exeFiles) {
-            Copy-Item -Path $file.FullName -Destination $RELEASE_DIR
-          }
-        } else {
-          echo "EXE 파일을 찾을 수 없습니다."
-        }
-        
-        if ($dllFiles.Count -gt 0) {
-          echo "DLL 파일을 릴리스 디렉터리로 복사합니다."
-          foreach ($file in $dllFiles) {
-            Copy-Item -Path $file.FullName -Destination $RELEASE_DIR
-          }
-        }
-        
-        # README 파일 복사 (있는 경우)
-        if (Test-Path -Path "README.md") {
-          Copy-Item -Path "README.md" -Destination $RELEASE_DIR
-        }
-        
-        echo "릴리스 디렉터리 내용:"
-        Get-ChildItem -Path $RELEASE_DIR | Select-Object Name, Length
-        
-        echo "release_dir=$RELEASE_DIR" >> $env:GITHUB_OUTPUT
-      shell: pwsh
-      
-    # 릴리스 파일 압축하기
-    - name: 릴리스 파일 압축
-      id: create_zip
-      run: |
-        $RELEASE_DIR = "${{ steps.prepare_release.outputs.release_dir }}"
-        $ZIP_NAME = "${{ steps.set_artifact_name.outputs.zip_name }}"
-        
-        # PowerShell로 ZIP 파일 생성
-        Compress-Archive -Path "$RELEASE_DIR\*" -DestinationPath $ZIP_NAME
-        
-        echo "ZIP 파일 생성 완료: $ZIP_NAME"
-        echo "zip_file=$ZIP_NAME" >> $env:GITHUB_OUTPUT
-      shell: pwsh
-      
-    # 빌드 결과물 업로드
-    - name: 빌드 결과물 업로드
-      id: upload_artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ steps.set_artifact_name.outputs.artifact_name }}
-        path: |
-          ${{ steps.prepare_release.outputs.release_dir }}/*
-          ${{ steps.create_zip.outputs.zip_file }}
-        retention-days: 30
-        if-no-files-found: warn
-        
-    # GitHub 릴리스 생성
-    - name: Release 생성
-      if: github.ref_type == 'tag'
-      uses: softprops/action-gh-release@v1
-      with:
-        name: WindowLocker ${{ steps.set_version.outputs.version }}
-        draft: false
-        prerelease: false
-        files: |
-          ${{ steps.create_zip.outputs.zip_file }}
-          ${{ steps.prepare_release.outputs.release_dir }}/*.exe
-        token: ${{ github.token }}
-        body: |         
-          ## 설치 방법
-          1. 시작프로그램에 등록하여 사용하세요.
-          2. F7 키를 눌러 비밀번호를 입력하면 프로그램이 실행됩니다.       
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
 
-  # 아티팩트 다운로드 작업은 별도 실행하지 않고 필요한 경우에만 활성화
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Restore packages
+        run: nuget restore $env:SOLUTION_FILE
+        shell: pwsh
+
+      - name: Set version
+        id: set_version
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $version = "${{ github.ref_name }}".TrimStart("v")
+          } else {
+            $today = Get-Date -Format "yyyy.MM.dd"
+            $shortSha = "${{ github.sha }}".Substring(0, 7)
+            $version = "$today-$shortSha"
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Set artifact names
+        id: set_artifact_name
+        run: |
+          $version = "${{ steps.set_version.outputs.version }}"
+          "artifact_name=WindowLocker-$version-Release" >> $env:GITHUB_OUTPUT
+          "zip_name=WindowLocker-$version-x64.zip" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Build release
+        run: >
+          msbuild $env:SOLUTION_FILE
+          /t:Build
+          /p:Configuration=$env:BUILD_CONFIGURATION
+          /p:Platform=$env:BUILD_PLATFORM
+        shell: pwsh
+
+      - name: Verify build output
+        id: verify_output
+        run: |
+          $buildOutput = Join-Path $env:GITHUB_WORKSPACE $env:BUILD_OUTPUT_DIR
+
+          if (-not (Test-Path -LiteralPath $buildOutput)) {
+            Write-Error "Build output directory not found: $buildOutput"
+          }
+
+          Get-ChildItem -LiteralPath $buildOutput -Recurse | Select-Object FullName, Length, LastWriteTime
+          "build_output=$buildOutput" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Prepare release files
+        id: prepare_release
+        run: |
+          $buildOutput = "${{ steps.verify_output.outputs.build_output }}"
+          $releaseDir = Join-Path $env:GITHUB_WORKSPACE "ReleaseFiles"
+
+          New-Item -Path $releaseDir -ItemType Directory -Force | Out-Null
+          Copy-Item -Path (Join-Path $buildOutput "*") -Destination $releaseDir -Recurse -Force
+
+          if (Test-Path -LiteralPath "README.md") {
+            Copy-Item -LiteralPath "README.md" -Destination $releaseDir -Force
+          }
+
+          Get-ChildItem -LiteralPath $releaseDir -Recurse | Select-Object FullName, Length
+          "release_dir=$releaseDir" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Create zip package
+        id: create_zip
+        run: |
+          $releaseDir = "${{ steps.prepare_release.outputs.release_dir }}"
+          $zipPath = Join-Path $env:GITHUB_WORKSPACE "${{ steps.set_artifact_name.outputs.zip_name }}"
+
+          if (Test-Path -LiteralPath $zipPath) {
+            Remove-Item -LiteralPath $zipPath -Force
+          }
+
+          Compress-Archive -Path (Join-Path $releaseDir "*") -DestinationPath $zipPath
+          "zip_file=$zipPath" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.set_artifact_name.outputs.artifact_name }}
+          path: |
+            ${{ steps.prepare_release.outputs.release_dir }}/**
+            ${{ steps.create_zip.outputs.zip_file }}
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Create GitHub release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: WindowLocker ${{ steps.set_version.outputs.version }}
+          draft: false
+          prerelease: false
+          files: ${{ steps.create_zip.outputs.zip_file }}
+          token: ${{ github.token }}
+          body: |
+            ## Install
+            1. Download the zip file for this release.
+            2. Extract all files to a folder of your choice.
+            3. Run `WindowLocker.exe`.
+
   download-artifacts:
     needs: build
     runs-on: windows-latest
     if: github.event_name == 'workflow_dispatch'
-    
+
     steps:
-    - name: 빌드 결과물 다운로드
-      uses: actions/download-artifact@v4
-      with:
-        name: ${{ needs.build.outputs.artifact_name }}
-        path: downloaded-artifact
-        
-    - name: 다운로드 확인
-      run: |
-        echo "아티팩트 이름: ${{ needs.build.outputs.artifact_name }}"
-        echo "빌드 버전: ${{ needs.build.outputs.version }}"
-        
-        if (Test-Path -Path "downloaded-artifact") {
-          echo "다운로드된 파일 목록:"
-          Get-ChildItem -Path "downloaded-artifact" -Recurse
-        } else {
-          echo "다운로드된 아티팩트 디렉터리가 없습니다."
-        }
-      shell: pwsh 
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: downloaded-artifact
+
+      - name: Verify downloaded artifact
+        run: |
+          Write-Host "Artifact name: ${{ needs.build.outputs.artifact_name }}"
+          Write-Host "Build version: ${{ needs.build.outputs.version }}"
+
+          if (-not (Test-Path -LiteralPath "downloaded-artifact")) {
+            Write-Error "Artifact directory not found."
+          }
+
+          Get-ChildItem -LiteralPath "downloaded-artifact" -Recurse
+        shell: pwsh
