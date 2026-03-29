@@ -19,6 +19,8 @@ namespace WindowLocker.Managers
     {
         private static Timer _taskbarCheckTimer;
         private const int SignageLogPixels = 96;
+        private static readonly Guid PowerSubGroupNone = new Guid("fea3413e-7e05-4911-9a71-700331f1c294");
+        private static readonly Guid PowerSettingConsoleLock = new Guid("0e796bdb-100d-47d6-a2d5-f7d2daa51f51");
         private static readonly Guid PowerSubGroupHardDisk = new Guid("0012ee47-9041-4b5d-9b77-535fba8b1442");
         private static readonly Guid PowerSettingHardDiskIdle = new Guid("6738e2c4-e8a5-4a42-b16a-e040e769756e");
         private static readonly Guid PowerSubGroupMultimedia = new Guid("9596fb26-9850-41fd-ac3e-f7c3c00afd4b");
@@ -452,6 +454,11 @@ namespace WindowLocker.Managers
                 {
                     key.SetValue("HiberbootEnabled", 0, RegistryValueKind.DWord);
                     key.SetValue("AwayModeEnabled", 1, RegistryValueKind.DWord);
+                }
+
+                using (RegistryKey key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System", true))
+                {
+                    key.SetValue("InactivityTimeoutSecs", 0, RegistryValueKind.DWord);
                 }
 
                 ApplySignageDesktopScaling();
@@ -997,6 +1004,15 @@ namespace WindowLocker.Managers
         {
             try
             {
+                using (RegistryKey systemPolicyKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"))
+                {
+                    if (systemPolicyKey == null ||
+                        !TryGetDwordValue(systemPolicyKey, "InactivityTimeoutSecs", out int inactivityTimeoutSecs) || inactivityTimeoutSecs != 0)
+                    {
+                        return false;
+                    }
+                }
+
                 using (RegistryKey desktopKey = Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop"))
                 {
                     if (desktopKey == null ||
@@ -1035,8 +1051,11 @@ namespace WindowLocker.Managers
 
         public static bool IsSignagePowerSettingsApplied()
         {
-            return TryGetCurrentPowerSettingIndices(PowerSubGroupHardDisk, PowerSettingHardDiskIdle, out uint hardDiskAcValue, out uint hardDiskDcValue) &&
+            return TryGetCurrentPowerSettingIndices(PowerSubGroupNone, PowerSettingConsoleLock, out uint consoleLockAcValue, out uint consoleLockDcValue) &&
+                   TryGetCurrentPowerSettingIndices(PowerSubGroupHardDisk, PowerSettingHardDiskIdle, out uint hardDiskAcValue, out uint hardDiskDcValue) &&
                    TryGetCurrentPowerSettingIndices(PowerSubGroupMultimedia, PowerSettingWhenSharingMedia, out uint mediaSharingAcValue, out uint mediaSharingDcValue) &&
+                   consoleLockAcValue == 0 &&
+                   consoleLockDcValue == 0 &&
                    hardDiskAcValue == 0 &&
                    hardDiskDcValue == 0 &&
                    mediaSharingAcValue == 0 &&
@@ -1089,6 +1108,12 @@ namespace WindowLocker.Managers
 
         private static void ApplySignagePowerPlanSettings()
         {
+            ExecuteCommand(
+                "powercfg",
+                $"/setacvalueindex scheme_current {PowerSubGroupNone:D} {PowerSettingConsoleLock:D} 0");
+            ExecuteCommand(
+                "powercfg",
+                $"/setdcvalueindex scheme_current {PowerSubGroupNone:D} {PowerSettingConsoleLock:D} 0");
             ExecuteCommand("powercfg", "/change disk-timeout-ac 0");
             ExecuteCommand("powercfg", "/change disk-timeout-dc 0");
             ExecuteCommand(
