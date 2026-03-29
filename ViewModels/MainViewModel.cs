@@ -615,10 +615,15 @@ namespace WindowLocker.ViewModels
 
             try
             {
+                string effectiveAutoLoginPassword = AutoLoginPassword;
+
                 bool completed = await RunProtectedSettingsOperationAsync(
-                    () => ApplySignageSettings(showMessages: false),
+                    () => effectiveAutoLoginPassword = ApplySignageSettingsCore(),
                     () =>
                     {
+                        UpdateAutoLoginPassword();
+                        AutoLoginUsername = Environment.UserName;
+
                         DisableSmartScreen = true;
                         DisableSmartAppControl = true;
                     });
@@ -626,6 +631,13 @@ namespace WindowLocker.ViewModels
                 {
                     return;
                 }
+
+                EnableAutoLogin = !string.IsNullOrEmpty(effectiveAutoLoginPassword);
+                if (EnableAutoLogin)
+                {
+                    AutoLoginPassword = effectiveAutoLoginPassword;
+                }
+                RefreshAutoLoginPasswordBox();
 
                 if (MainWindow.Instance.IsVisible)
                 {
@@ -724,11 +736,18 @@ namespace WindowLocker.ViewModels
                     return;
                 }
     
-                SystemManager.ApplySignageSettings();
+                UpdateAutoLoginPassword();
+                AutoLoginUsername = Environment.UserName;
+
                 DisableSmartScreen = true;
                 DisableSmartAppControl = true;
-                SecurityManager.SetSmartScreenEnabled(false);
-                SecurityManager.SetSmartAppControlEnabled(false);
+                string effectiveAutoLoginPassword = ApplySignageSettingsCore();
+                EnableAutoLogin = !string.IsNullOrEmpty(effectiveAutoLoginPassword);
+                if (EnableAutoLogin)
+                {
+                    AutoLoginPassword = effectiveAutoLoginPassword;
+                }
+                RefreshAutoLoginPasswordBox();
                 
                 if (showMessages && MainWindow.Instance.IsVisible)
                     MessageBox.Show(MainWindow.Instance,
@@ -751,6 +770,41 @@ namespace WindowLocker.ViewModels
                 {
                     throw;
                 }
+            }
+        }
+
+        private string ApplySignageSettingsCore()
+        {
+            SystemManager.ApplySignageSettings();
+            SecurityManager.SetSmartScreenEnabled(false);
+            SecurityManager.SetSmartAppControlEnabled(false);
+
+            return SecurityManager.ConfigureSignageAutoLogin(AutoLoginUsername, AutoLoginPassword);
+        }
+
+        private void RefreshAutoLoginPasswordBox()
+        {
+            if (AutoLoginPasswordBox == null)
+            {
+                return;
+            }
+
+            Action updatePasswordBox = () =>
+            {
+                string password = AutoLoginPassword ?? string.Empty;
+                if (AutoLoginPasswordBox.Password != password)
+                {
+                    AutoLoginPasswordBox.Password = password;
+                }
+            };
+
+            if (AutoLoginPasswordBox.Dispatcher.CheckAccess())
+            {
+                updatePasswordBox();
+            }
+            else
+            {
+                AutoLoginPasswordBox.Dispatcher.Invoke(updatePasswordBox);
             }
         }
 

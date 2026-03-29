@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.ServiceProcess;
@@ -18,6 +19,32 @@ namespace WindowLocker.Managers
     {
         private static Timer _taskbarCheckTimer;
         private const int SignageLogPixels = 96;
+        private static readonly Guid PowerSubGroupHardDisk = new Guid("0012ee47-9041-4b5d-9b77-535fba8b1442");
+        private static readonly Guid PowerSettingHardDiskIdle = new Guid("6738e2c4-e8a5-4a42-b16a-e040e769756e");
+        private static readonly Guid PowerSubGroupMultimedia = new Guid("9596fb26-9850-41fd-ac3e-f7c3c00afd4b");
+        private static readonly Guid PowerSettingWhenSharingMedia = new Guid("03680956-93bc-4294-bba6-4e0f09bb717f");
+
+        [DllImport("powrprof.dll", SetLastError = true)]
+        private static extern uint PowerGetActiveScheme(IntPtr userRootPowerKey, out IntPtr activePolicyGuid);
+
+        [DllImport("powrprof.dll", SetLastError = true)]
+        private static extern uint PowerReadACValueIndex(
+            IntPtr rootPowerKey,
+            IntPtr schemeGuid,
+            ref Guid subGroupOfPowerSettingsGuid,
+            ref Guid powerSettingGuid,
+            out uint acValueIndex);
+
+        [DllImport("powrprof.dll", SetLastError = true)]
+        private static extern uint PowerReadDCValueIndex(
+            IntPtr rootPowerKey,
+            IntPtr schemeGuid,
+            ref Guid subGroupOfPowerSettingsGuid,
+            ref Guid powerSettingGuid,
+            out uint dcValueIndex);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr LocalFree(IntPtr hMem);
         
         public static void SetTaskbarEnabled(bool enabled)
         {
@@ -952,6 +979,7 @@ namespace WindowLocker.Managers
 
                 ExecuteCommand("powercfg", "-duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61");
                 ExecuteCommand("powercfg", "-setactive e9a42b02-d5df-448d-aa00-03f14749eb61");
+                ApplySignagePowerPlanSettings();
                 
                 // 작업표시줄 설정이 적용되도록 탐색기 재시작
                 RestartExplorer();
@@ -1005,6 +1033,16 @@ namespace WindowLocker.Managers
             }
         }
 
+        public static bool IsSignagePowerSettingsApplied()
+        {
+            return TryGetCurrentPowerSettingIndices(PowerSubGroupHardDisk, PowerSettingHardDiskIdle, out uint hardDiskAcValue, out uint hardDiskDcValue) &&
+                   TryGetCurrentPowerSettingIndices(PowerSubGroupMultimedia, PowerSettingWhenSharingMedia, out uint mediaSharingAcValue, out uint mediaSharingDcValue) &&
+                   hardDiskAcValue == 0 &&
+                   hardDiskDcValue == 0 &&
+                   mediaSharingAcValue == 0 &&
+                   mediaSharingDcValue == 0;
+        }
+
         /// <summary>
         /// 탐색기 프로세스를 재시작합니다.
         /// </summary>
@@ -1047,6 +1085,74 @@ namespace WindowLocker.Managers
             }
 
             Registry.CurrentUser.DeleteSubKeyTree(@"Control Panel\Desktop\PerMonitorSettings", false);
+        }
+
+        private static void ApplySignagePowerPlanSettings()
+        {
+            ExecuteCommand("powercfg", "/change disk-timeout-ac 0");
+            ExecuteCommand("powercfg", "/change disk-timeout-dc 0");
+            ExecuteCommand(
+                "powercfg",
+                $"/setacvalueindex scheme_current {PowerSubGroupMultimedia:D} {PowerSettingWhenSharingMedia:D} 0");
+            ExecuteCommand(
+                "powercfg",
+                $"/setdcvalueindex scheme_current {PowerSubGroupMultimedia:D} {PowerSettingWhenSharingMedia:D} 0");
+            ExecuteCommand("powercfg", "/setactive scheme_current");
+        }
+
+        private static bool TryGetCurrentPowerSettingIndices(Guid subgroupGuid, Guid settingGuid, out uint acValueIndex, out uint dcValueIndex)
+        {
+            acValueIndex = 0;
+            dcValueIndex = 0;
+
+            IntPtr activeSchemePointer = IntPtr.Zero;
+
+            try
+            {
+                uint getSchemeResult = PowerGetActiveScheme(IntPtr.Zero, out activeSchemePointer);
+                if (getSchemeResult != 0 || activeSchemePointer == IntPtr.Zero)
+                {
+                    return false;
+                }
+
+                Guid activeSchemeGuid = (Guid)Marshal.PtrToStructure(activeSchemePointer, typeof(Guid));
+                IntPtr schemePointer = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(Guid)));
+
+                try
+                {
+                    Marshal.StructureToPtr(activeSchemeGuid, schemePointer, false);
+
+                    uint readAcResult = PowerReadACValueIndex(
+                        IntPtr.Zero,
+                        schemePointer,
+                        ref subgroupGuid,
+                        ref settingGuid,
+                        out acValueIndex);
+                    uint readDcResult = PowerReadDCValueIndex(
+                        IntPtr.Zero,
+                        schemePointer,
+                        ref subgroupGuid,
+                        ref settingGuid,
+                        out dcValueIndex);
+
+                    return readAcResult == 0 && readDcResult == 0;
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(schemePointer);
+                }
+            }
+            catch
+            {
+                return false;
+            }
+            finally
+            {
+                if (activeSchemePointer != IntPtr.Zero)
+                {
+                    LocalFree(activeSchemePointer);
+                }
+            }
         }
 
         private static bool TryGetDwordValue(RegistryKey key, string valueName, out int value)

@@ -55,6 +55,9 @@ namespace WindowLocker.Views
                         isAnySettingNotApplied = true;
                 }
 
+                if (!SystemManager.IsSignagePowerSettingsApplied())
+                    isAnySettingNotApplied = true;
+
                 // 3. 데스크톱 설정 확인
                 if (!SystemManager.IsSignageScalingApplied())
                     isAnySettingNotApplied = true;
@@ -264,6 +267,10 @@ namespace WindowLocker.Views
                             isAnySettingNotApplied = true;
                     }
                 }
+
+                if (SecurityManager.IsLocalUserPasswordMissing(Environment.UserName) &&
+                    !SecurityManager.IsAutoLoginConfiguredForUser(Environment.UserName))
+                    isAnySettingNotApplied = true;
 
                 signageSettingsButton.IsEnabled = isAnySettingNotApplied;
             }

@@ -3,6 +3,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Threading;
 using System.Windows;
@@ -14,6 +15,35 @@ namespace WindowLocker.Managers
     {
         private const int DefaultProcessTimeoutMilliseconds = 30000;
         private const int BackgroundProcessStartupTimeoutMilliseconds = 2000;
+        public const string DefaultSignageAutoLoginPassword = "1234";
+
+        private const uint UserInfoLevel1 = 1;
+        private const uint UserFlagPasswordNotRequired = 0x0020;
+        private const int NetApiSuccess = 0;
+        private const int NetApiUserNotFound = 2221;
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct USER_INFO_1
+        {
+            public string usri1_name;
+            public string usri1_password;
+            public uint usri1_password_age;
+            public uint usri1_priv;
+            public string usri1_home_dir;
+            public string usri1_comment;
+            public uint usri1_flags;
+            public string usri1_script_path;
+        }
+
+        [DllImport("Netapi32.dll", CharSet = CharSet.Unicode)]
+        private static extern int NetUserGetInfo(
+            string servername,
+            string username,
+            uint level,
+            out IntPtr bufptr);
+
+        [DllImport("Netapi32.dll")]
+        private static extern int NetApiBufferFree(IntPtr buffer);
 
         /// <summary>
         /// Enables or disables the Registry Editor
@@ -184,6 +214,102 @@ namespace WindowLocker.Managers
                 {
                     CleanupAutologonTool(exePath);
                 }
+            }
+        }
+
+        public static string ConfigureSignageAutoLogin(string username, string configuredPassword)
+        {
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                throw new InvalidOperationException("Auto login username is required for signage settings.");
+            }
+
+            if (IsLocalUserPasswordMissing(username))
+            {
+                SetLocalUserPassword(username, DefaultSignageAutoLoginPassword);
+                SetAutoLogin(true, username, DefaultSignageAutoLoginPassword);
+
+                return DefaultSignageAutoLoginPassword;
+            }
+
+            SetAutoLogin(false);
+            return null;
+        }
+
+        public static bool IsLocalUserPasswordMissing(string username)
+        {
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                return false;
+            }
+
+            return IsLocalUserPasswordNotRequired(username);
+        }
+
+        public static bool IsAutoLoginConfiguredForUser(string username)
+        {
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                return false;
+            }
+
+            using (RegistryKey key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"))
+            {
+                if (key == null)
+                {
+                    return false;
+                }
+
+                string autoAdminLogon = key.GetValue("AutoAdminLogon") as string;
+                string defaultUserName = key.GetValue("DefaultUserName") as string;
+
+                return string.Equals(autoAdminLogon, "1", StringComparison.OrdinalIgnoreCase) &&
+                       string.Equals(defaultUserName, username, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        private static bool IsLocalUserPasswordNotRequired(string username)
+        {
+            IntPtr userInfoBuffer = IntPtr.Zero;
+
+            try
+            {
+                int result = NetUserGetInfo(null, username, UserInfoLevel1, out userInfoBuffer);
+                if (result == NetApiUserNotFound)
+                {
+                    return false;
+                }
+
+                if (result != NetApiSuccess)
+                {
+                    throw new Exception($"NetUserGetInfo failed with code {result}.");
+                }
+
+                USER_INFO_1 userInfo = (USER_INFO_1)Marshal.PtrToStructure(userInfoBuffer, typeof(USER_INFO_1));
+                return (userInfo.usri1_flags & UserFlagPasswordNotRequired) == UserFlagPasswordNotRequired;
+            }
+            finally
+            {
+                if (userInfoBuffer != IntPtr.Zero)
+                {
+                    NetApiBufferFree(userInfoBuffer);
+                }
+            }
+        }
+
+        private static void SetLocalUserPassword(string username, string password)
+        {
+            try
+            {
+                RunProcess(
+                    "net",
+                    $"user \"{username}\" \"{password}\"",
+                    DefaultProcessTimeoutMilliseconds,
+                    "Local user password update");
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Failed to set password for local user '{username}': {ex.Message}", ex);
             }
         }
 
