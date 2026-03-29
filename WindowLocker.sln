@@ -7,16 +7,24 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WindowLocker", "WindowLocke
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
 		Debug|x64 = Debug|x64
+		Release|Any CPU = Release|Any CPU
 		Release|x64 = Release|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FFC6FF9F-A178-490E-88C5-7D1AF5777592}.Debug|Any CPU.ActiveCfg = Debug|x64
+		{FFC6FF9F-A178-490E-88C5-7D1AF5777592}.Debug|Any CPU.Build.0 = Debug|x64
 		{FFC6FF9F-A178-490E-88C5-7D1AF5777592}.Debug|x64.ActiveCfg = Debug|x64
 		{FFC6FF9F-A178-490E-88C5-7D1AF5777592}.Debug|x64.Build.0 = Debug|x64
+		{FFC6FF9F-A178-490E-88C5-7D1AF5777592}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FFC6FF9F-A178-490E-88C5-7D1AF5777592}.Release|x64.ActiveCfg = Release|x64
 		{FFC6FF9F-A178-490E-88C5-7D1AF5777592}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {824D2562-81BE-447A-978B-4EBC1000F132}
 	EndGlobalSection
 EndGlobal
