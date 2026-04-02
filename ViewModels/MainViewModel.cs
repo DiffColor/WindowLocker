@@ -622,10 +622,7 @@ namespace WindowLocker.ViewModels
                     () =>
                     {
                         UpdateAutoLoginPassword();
-                        AutoLoginUsername = Environment.UserName;
-
-                        DisableSmartScreen = true;
-                        DisableSmartAppControl = true;
+                        ApplySignagePresetSelections();
                     });
                 if (!completed)
                 {
@@ -735,12 +732,9 @@ namespace WindowLocker.ViewModels
 
                     return;
                 }
-    
-                UpdateAutoLoginPassword();
-                AutoLoginUsername = Environment.UserName;
 
-                DisableSmartScreen = true;
-                DisableSmartAppControl = true;
+                UpdateAutoLoginPassword();
+                ApplySignagePresetSelections();
                 string effectiveAutoLoginPassword = ApplySignageSettingsCore();
                 EnableAutoLogin = !string.IsNullOrEmpty(effectiveAutoLoginPassword);
                 if (EnableAutoLogin)
@@ -776,10 +770,21 @@ namespace WindowLocker.ViewModels
         private string ApplySignageSettingsCore()
         {
             SystemManager.ApplySignageSettings();
-            SecurityManager.SetSmartScreenEnabled(false);
-            SecurityManager.SetSmartAppControlEnabled(false);
+            SystemManager.SetWindowsUpdateEnabled(!DisableWindowsUpdate);
+            SecurityManager.SetSmartScreenEnabled(!DisableSmartScreen);
+            SecurityManager.SetSmartAppControlEnabled(!DisableSmartAppControl);
+            SecurityManager.SetUACEnabled(!DisableUAC);
 
             return SecurityManager.ConfigureSignageAutoLogin(AutoLoginUsername, AutoLoginPassword);
+        }
+
+        private void ApplySignagePresetSelections()
+        {
+            AutoLoginUsername = Environment.UserName;
+            DisableWindowsUpdate = true;
+            DisableSmartScreen = true;
+            DisableSmartAppControl = true;
+            DisableUAC = true;
         }
 
         private void RefreshAutoLoginPasswordBox()
